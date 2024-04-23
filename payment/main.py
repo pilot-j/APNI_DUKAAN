@@ -4,6 +4,7 @@ from fastapi.background import BackgroundTasks
 from redis_om import get_redis_connection, HashModel
 from starlette.requests import Request
 import requests, time
+import json
 
 app = FastAPI()
 
@@ -42,10 +43,16 @@ def get(pk: str):
 
 @app.post('/orders')
 async def create(request: Request, background_tasks: BackgroundTasks):  # id, quantity
-    body = await request.json()
+    try:
+        body = await request.json()  # Need to await request.json()
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON payload"}
+
+    if not body:
+        return {"error": "Empty JSON payload"}
 
     req = requests.get('http://localhost:8000/products/%s' % body['id'])
-    product = req.json()
+    product = await req.json() # remove await
 
     order = Order(
         product_id=body['id'],
@@ -60,6 +67,8 @@ async def create(request: Request, background_tasks: BackgroundTasks):  # id, qu
     background_tasks.add_task(order_completed, order)
 
     return order
+
+
 
 
 def order_completed(order: Order):
